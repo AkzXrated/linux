@@ -52,11 +52,11 @@ static int krait_notifier_cb(struct notifier_block *nb,
 		ret = krait_mux_clk_ops.set_parent(&mux->hw, mux->safe_sel);
 		mux->reparent = false;
 	/*
-	 * By the time POST_RATE_CHANGE notifier is called,
-	 * clk framework itself would have changed the parent for the new rate.
-	 * Only otherwise, put back to the old parent.
+	 * ABORT_RATE_CHANGE has to be handled the same way: the core sends it
+	 * when any notifier fails PRE, and without restoring the parent here
+	 * the CPU (or the L2) is left on the safe parent permanently.
 	 */
-	} else if (event == POST_RATE_CHANGE) {
+	} else if (event == POST_RATE_CHANGE || event == ABORT_RATE_CHANGE) {
 		if (!mux->reparent)
 			ret = krait_mux_clk_ops.set_parent(&mux->hw,
 							   mux->old_index);
@@ -145,9 +145,15 @@ krait_add_sec_mux(struct device *dev, int id, const char *s,
 {
 	int cpu, ret;
 	struct krait_mux_clk *mux;
+	/*
+	 * Parent order must line up with sec_mux_map: the hardware select
+	 * value for the aux source is 2 and for QSB is 0 (the vendor's
+	 * clock-krait-8974 MUX_SRC_LIST is the register-level reference).
+	 * The aux entry (index 0) is filled in below.
+	 */
 	static struct clk_parent_data sec_mux_list[2] = {
-		{ .name = "qsb", .fw_name = "qsb" },
 		{},
+		{ .name = "qsb", .fw_name = "qsb" },
 	};
 	struct clk_init_data init = {
 		.parent_data = sec_mux_list,
@@ -188,10 +194,11 @@ krait_add_sec_mux(struct device *dev, int id, const char *s,
 			clk = ERR_PTR(-ENOMEM);
 			goto err_aux;
 		}
-		sec_mux_list[1].fw_name = parent_name;
-		sec_mux_list[1].name = parent_name;
+		sec_mux_list[0].fw_name = parent_name;
+		sec_mux_list[0].name = parent_name;
 	} else {
-		sec_mux_list[1].name = "apu_aux";
+		sec_mux_list[0].name = "acpu_aux";
+		sec_mux_list[0].fw_name = "acpu_aux";
 	}
 
 	ret = devm_clk_hw_register(dev, &mux->hw);
@@ -362,6 +369,7 @@ static int krait_cc_probe(struct platform_device *pdev)
 						"gpll0_vote", 0, 1, 2);
 		if (IS_ERR(clk))
 			return PTR_ERR(clk);
+		clk_prepare_enable(clk);
 	}
 
 	/* Krait configurations have at most 4 CPUs and one L2 */
