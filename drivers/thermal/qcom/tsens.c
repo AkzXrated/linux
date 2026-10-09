@@ -706,6 +706,17 @@ static int tsens_set_trips(struct thermal_zone_device *tz, int low, int high)
 	dev_dbg(dev, "[%u] %s: proposed thresholds: (%d:%d)\n",
 		hw_id, __func__, low, high);
 
+	/*
+	 * tsens on ADC-based sensors cannot honour a collapsed window
+	 * where low == high.  Widen the window to arm the neighbouring
+	 * whole degrees so the level-triggered uplow interrupt does not
+	 * fire continuously.
+	 */
+	if (low == high && tsens_version(priv) <= VER_1_X) {
+		low = max(low - 1000, -40000);
+		high = min(high + 1000, 125000);
+	}
+
 	cl_high = clamp_val(high, priv->feat->trip_min_temp, priv->feat->trip_max_temp);
 	cl_low  = clamp_val(low, priv->feat->trip_min_temp, priv->feat->trip_max_temp);
 
