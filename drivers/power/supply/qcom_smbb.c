@@ -45,6 +45,9 @@
 #define SMBB_CHG_VBAT_DET	0x05d
 #define SMBB_CHG_TCHG_MAX_EN	0x060
 #define TCHG_MAX_EN		BIT(7)
+#define SMBB_CHG_TCHG_MAX	0x061
+/* register counts in 4-minute units, biased by one */
+#define TCHG_MAX_MINUTES(m)	((m) / 4 - 1)
 #define SMBB_CHG_WDOG_TIME	0x062
 #define SMBB_CHG_WDOG_EN	0x065
 #define WDOG_EN			BIT(7)
@@ -723,8 +726,13 @@ static const struct reg_off_mask_default {
 	/* The bootloader is supposed to set this... make sure anyway. */
 	{ SMBB_MISC_BOOT_DONE, BOOT_DONE, BOOT_DONE },
 
-	/* Disable software timer */
-	{ SMBB_CHG_TCHG_MAX_EN, TCHG_MAX_EN, 0 },
+	/*
+	 * Bound a charge cycle, as the vendor does (150 minutes).
+	 * A cycle running longer than that is a fault, not a slow charge;
+	 * the hardware latches CHG_FAILED and halts charging.
+	 */
+	{ SMBB_CHG_TCHG_MAX, 0xff, TCHG_MAX_MINUTES(150), 0 },
+	{ SMBB_CHG_TCHG_MAX_EN, TCHG_MAX_EN, TCHG_MAX_EN, 0 },
 
 	/* Clear and disable watchdog */
 	{ SMBB_CHG_WDOG_TIME, 0xff, 160 },

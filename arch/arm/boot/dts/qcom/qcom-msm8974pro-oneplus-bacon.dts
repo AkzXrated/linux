@@ -624,3 +624,16 @@
 	extcon = <&smbb>;
 	qcom,init-seq = /bits/ 8 <0x1 0x64>;
 };
+
+&reserved_memory {
+	ramoops@ff00000 {
+		compatible = "ramoops";
+		reg = <0x0ff00000 0x00100000>;
+		no-map;
+		record-size = <0x00008000>;
+		console-size = <0x00080000>;
+		pmsg-size = <0x00020000>;
+		max-reason = <3>;
+	};
+};
+
