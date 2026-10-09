@@ -119,17 +119,11 @@
 
 		idle-states {
 			/*
-			 * Deep per-core power-collapse is DISABLED (WFI-only idle)
-			 * as the interim fix for the DVFS-transition silent PS_HOLD
-			 * reset: a core running the SPM power-collapse sequence
-			 * concurrently with an L2 gang-rail voltage write corrupts
-			 * the shared SAW/rail.  Even with the write made
-			 * preemption-safe, another core collapsing during the write
-			 * still triggers it, so free DVFS needs cpu-spc off here.
-			 * Tradeoff: higher idle power (cores clock-gate at WFI, do
-			 * not power-collapse).  The power-optimal fix is to
-			 * coordinate collapse against the gang-rail write instead of
-			 * disabling it - tracked as the last DVFS item.
+			 * Deep per-core Standalone Power Collapse (SPC) is enabled.
+			 * The L2 gang-rail write primitive in drivers/soc/qcom/spm.c
+			 * is now serialized under spm_lock, preventing concurrent
+			 * SPM state-machine collision between rail voltage writes
+			 * and sibling-core sleep entry/exit.
 			 */
 			cpu_spc: cpu-spc {
 				compatible = "qcom,idle-state-spc",
@@ -137,7 +131,6 @@
 				entry-latency-us = <150>;
 				exit-latency-us = <200>;
 				min-residency-us = <2000>;
-				status = "disabled";
 			};
 		};
 	};
@@ -2660,7 +2653,7 @@
 		 */
 		opp-300000000 {
 			opp-hz = /bits/ 64 <300000000>;
-			required-opps = <&rpmpd_opp_super_turbo>;
+			required-opps = <&rpmpd_opp_nom>;
 			opp-supported-hw = <0xf>;
 			opp-microvolt = <800000 800000 1275000>;
 			opp-microvolt-speed1-pvs0-v0 = <775000 775000 1275000>;
@@ -2713,7 +2706,7 @@
 
 		opp-422400000 {
 			opp-hz = /bits/ 64 <422400000>;
-			required-opps = <&rpmpd_opp_super_turbo>;
+			required-opps = <&rpmpd_opp_nom>;
 			opp-supported-hw = <0xf>;
 			opp-microvolt = <820000 820000 1275000>;
 			opp-microvolt-speed1-pvs0-v0 = <775000 775000 1275000>;
@@ -2766,7 +2759,7 @@
 
 		opp-652800000 {
 			opp-hz = /bits/ 64 <652800000>;
-			required-opps = <&rpmpd_opp_super_turbo>;
+			required-opps = <&rpmpd_opp_nom>;
 			opp-supported-hw = <0xf>;
 			opp-microvolt = <850000 850000 1275000>;
 			opp-microvolt-speed1-pvs0-v0 = <800000 800000 1275000>;
@@ -2819,7 +2812,7 @@
 
 		opp-729600000 {
 			opp-hz = /bits/ 64 <729600000>;
-			required-opps = <&rpmpd_opp_super_turbo>;
+			required-opps = <&rpmpd_opp_nom>;
 			opp-supported-hw = <0xf>;
 			opp-microvolt = <860000 860000 1275000>;
 			opp-microvolt-speed1-pvs0-v0 = <810000 810000 1275000>;
@@ -2872,7 +2865,7 @@
 
 		opp-883200000 {
 			opp-hz = /bits/ 64 <883200000>;
-			required-opps = <&rpmpd_opp_super_turbo>;
+			required-opps = <&rpmpd_opp_nom>;
 			opp-supported-hw = <0xf>;
 			opp-microvolt = <880000 880000 1275000>;
 			opp-microvolt-speed1-pvs0-v0 = <830000 830000 1275000>;
@@ -2925,7 +2918,7 @@
 
 		opp-960000000 {
 			opp-hz = /bits/ 64 <960000000>;
-			required-opps = <&rpmpd_opp_super_turbo>;
+			required-opps = <&rpmpd_opp_nom>;
 			opp-supported-hw = <0xf>;
 			opp-microvolt = <890000 890000 1275000>;
 			opp-microvolt-speed1-pvs0-v0 = <840000 840000 1275000>;
@@ -2978,7 +2971,7 @@
 
 		opp-1036800000 {
 			opp-hz = /bits/ 64 <1036800000>;
-			required-opps = <&rpmpd_opp_super_turbo>;
+			required-opps = <&rpmpd_opp_nom>;
 			opp-supported-hw = <0xf>;
 			opp-microvolt = <900000 900000 1275000>;
 			opp-microvolt-speed1-pvs0-v0 = <850000 850000 1275000>;

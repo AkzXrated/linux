@@ -384,24 +384,30 @@ static inline u32 spm_register_read(struct spm_driver_data *drv,
 	return readl_relaxed(drv->reg_base + drv->reg_data->reg_offset[reg]);
 }
 
+static DEFINE_RAW_SPINLOCK(spm_lock);
+
 void spm_set_low_power_mode(struct spm_driver_data *drv,
 			    enum pm_sleep_mode mode)
 {
+	unsigned long flags;
 	u32 start_index;
 	u32 ctl_val;
 
 	start_index = drv->reg_data->start_index[mode];
 
+	raw_spin_lock_irqsave(&spm_lock, flags);
 	ctl_val = spm_register_read(drv, SPM_REG_SPM_CTL);
 	ctl_val &= ~(SPM_CTL_INDEX << SPM_CTL_INDEX_SHIFT);
 	ctl_val |= start_index << SPM_CTL_INDEX_SHIFT;
 	ctl_val |= SPM_CTL_EN;
 	spm_register_write_sync(drv, SPM_REG_SPM_CTL, ctl_val);
+	raw_spin_unlock_irqrestore(&spm_lock, flags);
 }
 
 static int spm_set_voltage_sel(struct regulator_dev *rdev, unsigned int selector)
 {
 	struct spm_driver_data *drv = rdev_get_drvdata(rdev);
+	unsigned long flags;
 
 	drv->volt_sel_req = selector;
 	drv->set_vdd_ret = 0;
@@ -416,20 +422,16 @@ static int spm_set_voltage_sel(struct regulator_dev *rdev, unsigned int selector
 
 	/*
 	 * Run the L2/APCS gang-rail write (RST kick -> VCTL -> PMIC_STS poll)
-	 * with preemption disabled.  This rail has no associated CPU
-	 * (reg_cpu < 0) so set_vdd() executes in the caller's context on an
-	 * arbitrary CPU; if that CPU is scheduled away - or, worse, enters
-	 * cpuidle and runs its own per-core SPM power-collapse sequence -
-	 * between the RST and the completion of the PMIC handshake, the SAW
-	 * state machine on the shared rail is left mid-operation and the SoC
-	 * silently resets (PS_HOLD).  The vendor wraps the identical write in
-	 * get_cpu()/put_cpu() for exactly this reason; preemption-off is the one
-	 * context it guarantees that this driver lacked.  IRQs are deliberately
-	 * left enabled - the vendor's apcs-master path does not disable them.
+	 * under spm_lock with interrupts disabled.  This rail has no
+	 * associated CPU (reg_cpu < 0) so set_vdd() executes in the caller's
+	 * context on an arbitrary CPU.  Taking spm_lock serializes this write
+	 * against any sibling core entering or exiting cpuidle power-collapse
+	 * (spm_set_low_power_mode), preventing concurrent SPM state-machine
+	 * corruption on the shared APCS/PMIC bus.
 	 */
-	preempt_disable();
+	raw_spin_lock_irqsave(&spm_lock, flags);
 	drv->reg_data->set_vdd(drv);
-	preempt_enable();
+	raw_spin_unlock_irqrestore(&spm_lock, flags);
 
 	/*
 	 * Propagate a failed rail write.  Without this the OPP core sees
